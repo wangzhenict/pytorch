@@ -1,0 +1,42 @@
+name: Upload test stats while running
+
+on:
+  schedule:
+    # Every hour
+    - cron: '0 * * * *'
+
+concurrency:
+  group: upload-test-stats-while-running
+  cancel-in-progress: true
+
+jobs:
+  upload_test_stats_while_running:
+    name: Intermediate upload test stats
+    runs-on: ubuntu-22.04
+    environment: upload-stats
+    steps:
+      - name: Checkout PyTorch
+        uses: pytorch/pytorch/.github/actions/checkout-pytorch@main
+        with:
+          fetch-depth: 1
+          submodules: false
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - run: |
+          pip3 install requests==2.32.2 rockset==1.0.3 boto3==1.35.42
+
+      - name: Upload test stats
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WORKFLOW_RUN_ID: ${{ inputs.workflow_id }}
+          WORKFLOW_RUN_ATTEMPT: ${{ inputs.workflow_run_attempt }}
+        run: |
+          python3 -m tools.stats.upload_test_stats_intermediate \
+            --workflow-run-id "${WORKFLOW_RUN_ID}" \
+            --workflow-run-attempt "${WORKFLOW_RUN_ATTEMPT}" \
