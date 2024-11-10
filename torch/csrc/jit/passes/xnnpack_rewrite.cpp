@@ -62,7 +62,15 @@ void replaceConv1dWithConv2d(std::shared_ptr<Graph>& graph) {
   SubgraphRewriter rewriter;
   rewriter.RegisterRewritePattern(
       conv_1d_pattern, conv_2d_pattern, value_mappings);
-  rewriter.runOnGraph(graph);
+
+  auto filter_padding =
+      [](const Match& match,
+         const std::unordered_map<std::string, Value*>& vmap) {
+        auto* node = match.nodes_map.at(vmap.at("res")->node());
+        return node->schema().overload_name() != "padding";
+      };
+
+  rewriter.runOnGraph(graph, filter_padding);
 }
 
 } // namespace
