@@ -379,6 +379,7 @@ class StepcurrentPlugin:
     def save_cache(self) -> None:
         self.cache.set(self.directory, self.cache_info)
 
+    @pytest.hookimpl(trylast=True)
     def pytest_sessionfinish(self, session, exitstatus):
         self.cache_info["pytest_previous_status"] = 0 if exitstatus == 5 else exitstatus
         self.save_cache()
