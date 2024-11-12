@@ -1,21 +1,22 @@
-import argparse
-from pathlib import Path
 import sys
+import time
+from functools import lru_cache
+from typing import Any, List
 
 from tools.stats.test_dashboard import upload_additional_info
 from tools.stats.upload_stats_lib import get_s3_resource
 from tools.stats.upload_test_stats import get_tests
-from functools import lru_cache
+
 
 BUCKET_PREFIX = "workflows_failing_pending_upload"
 
 
 @lru_cache(maxsize=None)
-def get_bucket():
+def get_bucket() -> Any:
     return get_s3_resource().Bucket("gha-artifacts")
 
 
-def delete_obj(key):
+def delete_obj(key: str) -> None:
     # Does not raise error if key does not exist
     get_bucket().delete_objects(
         Delete={
@@ -25,14 +26,14 @@ def delete_obj(key):
     )
 
 
-def put_object(key):
+def put_object(key: str) -> None:
     get_bucket().put_object(
         Key=key,
         Body=b"",
     )
 
 
-def do_upload(workflow_id: str) -> None:
+def do_upload(workflow_id: int) -> None:
     workflow_attempt = 1
     test_cases = get_tests(workflow_id, workflow_attempt)
     # Flush stdout so that any errors in upload show up last in the logs.
@@ -40,13 +41,13 @@ def do_upload(workflow_id: str) -> None:
     upload_additional_info(workflow_id, workflow_attempt, test_cases)
 
 
-def get_workflow_ids(pending=False):
+def get_workflow_ids(pending: bool = False) -> List[int]:
     prefix = f"{BUCKET_PREFIX}/{'pending/' if pending else ''}"
     objs = get_bucket().objects.filter(Prefix=prefix)
-    return [obj.key.split("/")[-1].split(".")[0] for obj in objs]
+    return [int(obj.key.split("/")[-1].split(".")[0]) for obj in objs]
 
 
-def read_s3(pending=False):
+def read_s3(pending: bool = False) -> None:
     while True:
         workflows = get_workflow_ids(pending)
         if not workflows:

@@ -12,6 +12,7 @@ concurrency:
 
 jobs:
   upload_test_stats_while_running:
+    if: github.repository_owner == 'pytorch'
     name: Upload test stats while running
     runs-on: linux.2xlarge
     steps:
