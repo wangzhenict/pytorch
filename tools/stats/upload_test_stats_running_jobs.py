@@ -5,32 +5,69 @@ import sys
 from tools.stats.test_dashboard import upload_additional_info
 from tools.stats.upload_stats_lib import get_s3_resource
 from tools.stats.upload_test_stats import get_tests
+from functools import lru_cache
 
-def upload_for(workflow_id: str, workflow_attempt: int) -> None:
+BUCKET_PREFIX = "workflows_failing_pending_upload"
+
+
+@lru_cache(maxsize=None)
+def get_bucket():
+    return get_s3_resource().Bucket("gha-artifacts")
+
+
+def delete_obj(key):
+    # Does not raise error if key does not exist
+    get_bucket().delete_objects(
+        Delete={
+            "Objects": [{"Key": key}],
+            "Quiet": True,
+        }
+    )
+
+
+def put_object(key):
+    get_bucket().put_object(
+        Key=key,
+        Body=b"",
+    )
+
+
+def do_upload(workflow_id: str) -> None:
+    workflow_attempt = 1
     test_cases = get_tests(workflow_id, workflow_attempt)
-
-    # Flush stdout so that any errors in Rockset upload show up last in the logs.
+    # Flush stdout so that any errors in upload show up last in the logs.
     sys.stdout.flush()
-
     upload_additional_info(workflow_id, workflow_attempt, test_cases)
 
-def read_s3():
-    bucket_prefix = "workflows_failing_pending_upload"
-    bucket = get_s3_resource().Bucket("gha-artifacts")
-    objs = bucket.objects.filter(
-        Prefix=bucket_prefix
-    )
-    workflows = [obj.key.split("/")[-1].split(".")[0] for obj in objs]
-    for workflow_id in workflows:
-        print(workflow_id)
-        upload_for(workflow_id, 1)
-        bucket.delete_objects(
-            Delete={
-                "Objects": [{"Key": f"{bucket_prefix}/{workflow_id}.txt"}],
-                "Quiet": True,
-            }
-        )
+
+def get_workflow_ids(pending=False):
+    prefix = f"{BUCKET_PREFIX}/{'pending/' if pending else ''}"
+    objs = get_bucket().objects.filter(Prefix=prefix)
+    return [obj.key.split("/")[-1].split(".")[0] for obj in objs]
+
+
+def read_s3(pending=False):
+    while True:
+        workflows = get_workflow_ids(pending)
+        if not workflows:
+            if pending:
+                break
+            # Wait for more stuff to show up
+            print("Sleeping for 60 seconds")
+            time.sleep(60)
+        for workflow_id in workflows:
+            print(f"Processing {workflow_id}")
+            put_object(f"{BUCKET_PREFIX}/pending/{workflow_id}.txt")
+            delete_obj(f"{BUCKET_PREFIX}/{workflow_id}.txt")
+            try:
+                do_upload(workflow_id)
+            except Exception as e:
+                print(f"Failed to upload {workflow_id}: {e}")
+            delete_obj(f"{BUCKET_PREFIX}/pending/{workflow_id}.txt")
 
 
 if __name__ == "__main__":
+    # Workflows in the pending folder were previously in progress of uploading
+    # but failed to complete, so we need to retry them.
+    read_s3(pending=True)
     read_s3()
