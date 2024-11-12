@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   upload_test_stats_while_running:
-    name: Intermediate upload test stats
+    name: Upload test stats while running
     runs-on: linux.2xlarge
     steps:
       - name: Checkout PyTorch
@@ -34,5 +34,7 @@ jobs:
           ${CONDA_RUN} pip install requests==2.32.2 boto3==1.35.42
 
       - name: Upload test stats
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ${CONDA_RUN} python -m tools.stats.upload_test_stats_running_jobs
