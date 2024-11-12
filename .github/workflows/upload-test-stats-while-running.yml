@@ -14,7 +14,6 @@ jobs:
   upload_test_stats_while_running:
     name: Intermediate upload test stats
     runs-on: linux.2xlarge
-    environment: upload-stats
     steps:
       - name: Checkout PyTorch
         uses: pytorch/pytorch/.github/actions/checkout-pytorch@main
