@@ -335,9 +335,11 @@ def dynamo_timed(
         with torch.profiler.record_function(f"{key} (dynamo_timed)"):
             t0 = time.time()
             if phase_name:
-                chromium_log.log_event_start(phase_name, start_ns, {"fn_name": key})
+                chromium_log.log_event_start(
+                    phase_name, start_ns, {"fn_name": key}, log_pt2_compile_event
+                )
             else:
-                chromium_log.log_event_start(key, start_ns, {})
+                chromium_log.log_event_start(key, start_ns, {}, log_pt2_compile_event)
             yield
             time_spent = time.time() - t0
         compilation_time_metrics[key].append(time_spent)
@@ -1018,11 +1020,26 @@ class ChromiumEventLogger:
     """
 
     def get_stack(self):
+        """
+        The main event stack, with every chromium event.
+        Logged to tlparse.
+        """
         if hasattr(self.tls, "stack"):
             return self.tls.stack
         else:
-            self.tls.stack = ["__start__"]
+            self.tls.stack = []
             return self.tls.stack
+
+    def get_pt2_compile_substack(self):
+        """
+        A smaller subset of the main stack that gets used to log
+        PT2 Compile Events internally.
+        """
+        if hasattr(self.tls, "pt2_compile_substack"):
+            return self.tls.pt2_compile_substack
+        else:
+            self.tls.pt2_compile_substack = []
+            return self.tls.pt2_compile_substack
 
     def get_event_data(self) -> Dict[str, Any]:
         if not hasattr(self.tls, "event_data"):
@@ -1063,6 +1080,7 @@ class ChromiumEventLogger:
         event_name: str,
         time_ns: int,
         metadata: Dict[str, Any],
+        log_pt2_compile_event: bool = False,
     ) -> None:
         """
         Logs the start of a single event.
@@ -1081,13 +1099,16 @@ class ChromiumEventLogger:
         self.get_stack().append(event_name)
         # Add metadata from start event
         self.add_event_data(event_name, **metadata)
+        if log_pt2_compile_event:
+            self.get_pt2_compile_substack().append(event_name)
 
     def reset(self) -> None:
         # We this on every compile in case a compile crashes or restarts and we haven't
         # cleared the stack.
         stack = self.get_stack()
+        substack = self.get_pt2_compile_substack()
         stack.clear()
-        stack.append("__start__")
+        substack.clear()
         event_data = self.get_event_data()
         event_data.clear()
 
@@ -1126,28 +1147,40 @@ class ChromiumEventLogger:
             event_metadata,
         )
 
-        # These stack health checks currently never happen,
-        # but they're written this way to future proof any weird event
-        # overlaps in the future.
-        stack = self.get_stack()
-        if event_name not in stack:
-            # Something went wrong, we never called start on this event,
-            # or it was skipped due to overlapping events below
-            log.warning("ChromiumEventLogger: Start event not in stack, ignoring")
-            return
+        def pop_stack(stack):
+            # These stack health checks currently never happen,
+            # but they're written this way to future proof any weird event
+            # overlaps in the future.
+            if event_name not in stack:
+                # Something went wrong, we never called start on this event,
+                # or it was skipped due to overlapping events below
+                log.warning("ChromiumEventLogger: Start event not in stack, ignoring")
+                return
 
-        while event_name != stack[-1]:
-            # If the event isn't the most recent one to end, pop
-            # off the stack until it is.
-            # Since event_name in self.stack, this pop is always safe
-            log.warning(
-                "ChromiumEventLogger: Detected overlapping events, fixing stack"
-            )
-            stack.pop()
+            while event_name != stack[-1]:
+                # If the event isn't the most recent one to end, pop
+                # off the stack until it is.
+                # Since event_name in self.stack, this pop is always safe
+                log.warning(
+                    "ChromiumEventLogger: Detected overlapping events, fixing stack"
+                )
+                stack.pop()
+
+        event_stack = self.get_stack()
+
+        pop_stack(event_stack)
+
         if log_pt2_compile_event:
-            log_chromium_event_internal(event, stack, self.id_, start_time_ns)
+            pt2_compile_substack = self.get_pt2_compile_substack()
+            pop_stack(pt2_compile_substack)
+            log_chromium_event_internal(
+                event, pt2_compile_substack, self.id_, start_time_ns
+            )
+            # Pop actual event off of stack
+            pt2_compile_substack.pop()
+
         # Finally pop the actual event off the stack
-        stack.pop()
+        event_stack.pop()
 
     def _log_timed_event(
         self,
@@ -1215,7 +1248,9 @@ class ChromiumEventLogger:
         )
         if log_pt2_compile_event:
             # Log an instant event with the same start and end time
-            log_chromium_event_internal(event, self.get_stack(), self.id_, time_ns)
+            log_chromium_event_internal(
+                event, self.get_pt2_compile_substack(), self.id_, time_ns
+            )
 
 
 CHROMIUM_EVENT_LOG: Optional[ChromiumEventLogger] = None
