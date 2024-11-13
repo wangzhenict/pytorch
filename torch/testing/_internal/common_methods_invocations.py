@@ -13200,13 +13200,6 @@ op_db: List[OpInfo] = [
                    dtypes=all_types_and_complex_and(torch.bool, torch.half, torch.bfloat16),
                    dtypesIfCUDA=all_types_and_complex_and(torch.bool, torch.half, torch.bfloat16, torch.chalf),
                    dtypesIfHpu=custom_types(torch.float32, torch.bfloat16),
-                   skips=(
-                       # Reference: https://github.com/pytorch/pytorch/issues/48010
-                       DecorateInfo(unittest.skip("Skipped!"), 'TestUnaryUfuncs', 'test_reference_numerics_extremal',
-                                    device_type='cpu', dtypes=[torch.cfloat, torch.cdouble]),
-                       DecorateInfo(unittest.skip("Skipped!"), 'TestUnaryUfuncs', 'test_reference_numerics_large',
-                                    device_type='cpu', dtypes=[torch.cfloat, torch.cdouble]),
-                   ),
                    assert_autodiffed=True,
                    supports_forward_ad=True,
                    supports_fwgrad_bwgrad=True,
@@ -17845,11 +17838,6 @@ op_db: List[OpInfo] = [
                    skips=(
                        DecorateInfo(unittest.skip("Skipped!"), 'TestUnaryUfuncs', 'test_reference_numerics_large',
                                     dtypes=[torch.cdouble]),
-                       # Reference: https://github.com/pytorch/pytorch/issues/48010
-                       DecorateInfo(unittest.skip("Skipped!"), 'TestUnaryUfuncs', 'test_reference_numerics_extremal',
-                                    device_type='cpu', dtypes=[torch.cfloat, torch.cdouble]),
-                       DecorateInfo(unittest.skip("Skipped!"), 'TestUnaryUfuncs', 'test_reference_numerics_large',
-                                    device_type='cpu', dtypes=[torch.cfloat, torch.cdouble]),
                    )),
     UnaryUfuncInfo('expm1',
                    aliases=('special.expm1', ),
@@ -22334,15 +22322,6 @@ python_ref_db = [
     ElementwiseUnaryPythonRefInfo(
         "_refs.exp",
         torch_opinfo_name="exp",
-        skips=(
-            # Reference: https://github.com/pytorch/pytorch/issues/48010
-            DecorateInfo(unittest.skip("Skipped!"), 'TestUnaryUfuncs',
-                         'test_reference_numerics_extremal',
-                         device_type='cpu', dtypes=[torch.cfloat, torch.cdouble]),
-            DecorateInfo(unittest.skip("Skipped!"), 'TestUnaryUfuncs',
-                         'test_reference_numerics_large',
-                         device_type='cpu', dtypes=[torch.cfloat, torch.cdouble]),
-        ),
     ),
     ElementwiseUnaryPythonRefInfo(
         "_refs.expm1",
@@ -22355,13 +22334,6 @@ python_ref_db = [
             DecorateInfo(unittest.skip("Skipped!"), 'TestUnaryUfuncs',
                          'test_reference_numerics_large',
                          dtypes=[torch.cdouble]),
-            # Reference: https://github.com/pytorch/pytorch/issues/48010
-            DecorateInfo(unittest.skip("Skipped!"), 'TestUnaryUfuncs',
-                         'test_reference_numerics_extremal',
-                         device_type='cpu', dtypes=[torch.cfloat, torch.cdouble]),
-            DecorateInfo(unittest.skip("Skipped!"), 'TestUnaryUfuncs',
-                         'test_reference_numerics_large',
-                         device_type='cpu', dtypes=[torch.cfloat, torch.cdouble]),
         ),
     ),
     ElementwiseUnaryPythonRefInfo(
