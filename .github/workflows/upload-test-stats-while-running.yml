@@ -4,7 +4,6 @@ on:
   schedule:
     # Every hour
     - cron: '0 * * * *'
-  push:
 
 concurrency:
   group: upload-test-stats-while-running
