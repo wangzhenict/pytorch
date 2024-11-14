@@ -353,12 +353,10 @@ class StepcurrentPlugin:
             if test is not None:
                 self.report_status += f", stopping at {test[0]} (exclusive)"
             self.cache_info["prev_run"] = self.cache_info["to_run"][:i]
-            self.cache_info["to_run"] = self.cache_info["to_run"][i:]
         else:
             # Run single test
             deselected = items[:first_index] + items[first_index + 1 :]
             items[:] = items[first_index : first_index + 1]
-            self.cache_info["to_run"] = self.cache_info["to_run"][1:]
             self.cache_info["prev_run"] = [[first_test, status]]
             self.report_status += f"Running single test {first_test}"
 
