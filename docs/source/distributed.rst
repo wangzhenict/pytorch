@@ -329,32 +329,6 @@ a github issue or RFC if this is a use case that's blocking you.
 
 --------------------------------------------------------------------------------
 
-Distributed Key-Value Store
----------------------------
-
-The distributed package comes with a distributed key-value store, which can be
-used to share information between processes in the group as well as to
-initialize the distributed package in
-:func:`torch.distributed.init_process_group` (by explicitly creating the store
-as an alternative to specifying ``init_method``.) There are 3 choices for
-Key-Value Stores: :class:`~torch.distributed.TCPStore`,
-:class:`~torch.distributed.FileStore`, and :class:`~torch.distributed.HashStore`.
-
-.. autoclass:: Store
-.. autoclass:: TCPStore
-.. autoclass:: HashStore
-.. autoclass:: FileStore
-.. autoclass:: PrefixStore
-
-.. autofunction:: torch.distributed.Store.set
-.. autofunction:: torch.distributed.Store.get
-.. autofunction:: torch.distributed.Store.add
-.. autofunction:: torch.distributed.Store.compare_set
-.. autofunction:: torch.distributed.Store.wait
-.. autofunction:: torch.distributed.Store.num_keys
-.. autofunction:: torch.distributed.Store.delete_key
-.. autofunction:: torch.distributed.Store.set_timeout
-
 Groups
 ------
 
@@ -386,6 +360,7 @@ distributed process group easily. :func:`~torch.distributed.device_mesh.init_dev
 used to create new DeviceMesh, with a mesh shape describing the device topology.
 
 .. autoclass:: torch.distributed.device_mesh.DeviceMesh
+    :members:
 
 Point-to-point communication
 ----------------------------
@@ -506,6 +481,7 @@ Collective functions
 .. autofunction:: monitored_barrier
 
 .. autoclass:: Work
+    :members:
 
 .. autoclass:: ReduceOp
 
@@ -515,6 +491,67 @@ Collective functions
     ``MIN``, and ``MAX``.
 
     :class:`~torch.distributed.ReduceOp` is recommended to use instead.
+
+
+Distributed Key-Value Store
+---------------------------
+
+The distributed package comes with a distributed key-value store, which can be
+used to share information between processes in the group as well as to
+initialize the distributed package in
+:func:`torch.distributed.init_process_group` (by explicitly creating the store
+as an alternative to specifying ``init_method``.) There are 3 choices for
+Key-Value Stores: :class:`~torch.distributed.TCPStore`,
+:class:`~torch.distributed.FileStore`, and :class:`~torch.distributed.HashStore`.
+
+.. autoclass:: Store
+    :members:
+    :special-members:
+
+.. autoclass:: TCPStore
+    :members:
+    :special-members: __init__
+
+.. autoclass:: HashStore
+    :members:
+    :special-members: __init__
+
+.. autoclass:: FileStore
+    :members:
+    :special-members: __init__
+
+.. autoclass:: PrefixStore
+    :members:
+    :special-members: __init__
+
+
+
+Object Oriented Process Groups
+------------------------------
+
+We recommend most models use the global ProcessGroup registration and dist.*
+APIs but if you need more control over the process groups (i.e. dynamic world
+sizes) you can directly instantiate them.
+
+There are some notable differences:
+
+* These APIs are always asynchronous and require you to manually synchronize the returned :class:`~torch.distributed.Work` objects.
+* These APIs use per ProcessGroup ranks rather than the global ranks.
+
+.. autoclass:: ProcessGroup
+    :members:
+    :special-members: __init__
+
+.. autoclass:: ProcessGroupGloo
+    :members:
+    :special-members: __init__
+
+.. autoclass:: ProcessGroupNCCL
+    :members:
+    :special-members: __init__
+
+The other ProcessGroup backends (such as UCC and MPI) are conditionally built so
+not documented here.
 
 Profiling Collective Communication
 -----------------------------------------
