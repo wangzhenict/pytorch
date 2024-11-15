@@ -319,6 +319,7 @@ class StepcurrentPlugin:
             # Special case of the status == "cont" below where everything is cont
             for item in items:
                 self.cache_info["prev_run"].append([item.nodeid, "cont"])
+                self.cache_info["to_run"].append([item.nodeid, "cont"])
             self.cache_info["pytest_previous_status"] = "no xml"
             return
         # validate that the cache is correct

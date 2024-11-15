@@ -677,8 +677,11 @@ def run_test_retries(
         env = try_set_cpp_stack_traces(env, command, set=False)
 
         # Remove prev run from to run
-
-        cache["to_run"] = [[x, y] for x, y in cache["to_run"] if x not in [y for y, _ in cache["prev_run"]]]
+        cache["to_run"] = [
+            [x, y]
+            for x, y in cache["to_run"]
+            if x not in [y for y, _ in cache["prev_run"]]
+        ]
 
         if ret_code != 0 and cache["pytest_previous_status"] == 0:
             # Failed after exiting
