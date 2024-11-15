@@ -2,6 +2,10 @@
 # Owner(s): ["oncall: distributed"]
 
 import os
+import subprocess
+import sys
+import tempfile
+import unittest
 
 from numpy.testing import assert_array_equal
 
@@ -28,7 +32,7 @@ from torch.distributed.tensor.parallel import (
     parallelize_module,
     RowwiseParallel,
 )
-from torch.testing._internal.common_utils import run_tests
+from torch.testing._internal.common_utils import IS_FBCODE, run_tests
 from torch.testing._internal.distributed._tensor.common_dtensor import (
     DTensorTestBase,
     with_comms,
@@ -541,6 +545,51 @@ class DTensorTest(DTensorTestBase):
         buffer.seek(0)
         reloaded_st = torch.load(buffer, weights_only=True)
         self.assertEqual(sharded_tensor, reloaded_st)
+
+    @with_comms
+    @unittest.skipIf(
+        IS_FBCODE,
+        "subprocess import torch fails with ModuleNotFoundError: No module named 'torch' in fbcode",
+    )
+    def test_dtensor_save_load_import(self):
+        for should_import in [True, False]:
+            device_mesh = self.build_device_mesh()
+            placements = [Shard(0)]
+            local_tensor = torch.randn(3, 3)
+            sharded_tensor = DTensor.from_local(local_tensor, device_mesh, placements)
+            with tempfile.NamedTemporaryFile() as f:
+                torch.save(sharded_tensor, f)
+                import_string = (
+                    "import torch.distributed.tensor" if should_import else ""
+                )
+                script = f"""
+import torch
+{import_string}
+x = torch.load("{f.name}", weights_only=True)
+"""
+                try:
+                    subprocess.check_output(
+                        [sys.executable, "-c", script],
+                        cwd=os.path.dirname(os.path.realpath(__file__)),
+                        stderr=subprocess.STDOUT,
+                    )
+                    if not should_import:
+                        raise RuntimeError(
+                            "Script executed successfully despite lack of import"
+                        )
+                except subprocess.CalledProcessError as e:
+                    if should_import:
+                        err_msg = e.output.decode("utf-8")
+                        raise RuntimeError(f"Unexpected error raised: {err_msg}") from e
+                    else:
+                        if e.returncode < 0:
+                            self.fail("Subprocess exited with a fatal signal")
+                        else:
+                            err_msg = (
+                                "_pickle.UnpicklingError: Weights only load failed. "
+                                "``torch.distributed.tensor`` must be imported to load DTensors"
+                            )
+                            self.assertTrue(err_msg in e.output.decode("utf-8"))
 
 
 class DTensorMeshTest(DTensorTestBase):
