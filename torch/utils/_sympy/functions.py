@@ -570,26 +570,43 @@ class RShift(sympy.Function):
 
 
 class MinMaxBase(Expr, LatticeOp):  # type: ignore[misc]
-    def __new__(cls, *args, **assumptions):
+    def __new__(cls, *original_args, **assumptions):
         from sympy.core.parameters import global_parameters
 
-        evaluate = assumptions.pop("evaluate", global_parameters.evaluate)
-        args = (sympify(arg) for arg in args)
+        import torch._dynamo.config as config
 
-        # first standard filter, for cls.zero and cls.identity
-        # also reshape Max(a, Max(b, c)) to Max(a, b, c)
+        evaluate = assumptions.pop("evaluate", global_parameters.evaluate)
+        args = (sympify(arg) for arg in original_args)
 
         if evaluate:
             try:
+                # first standard filter, for cls.zero and cls.identity
+                # also reshape Max(a, Max(b, c)) to Max(a, b, c)
                 args = frozenset(cls._new_args_filter(args))  # type: ignore[assignment]
             except ShortCircuit:
                 return cls.zero  # type: ignore[attr-defined]
-            # remove redundant args that are easily identified
-            args = cls._collapse_arguments(args, **assumptions)
-            # find local zeros
-            args = cls._find_localzeros(args, **assumptions)
 
-        args = frozenset(args)
+            # When this is not none we can bypass _find_localzeros and _collapse_arguments.
+            unique_summation_atoms = cls._should_optimize_max_of_unique_summations(
+                original_args
+            )
+
+            if unique_summation_atoms is None:
+                # remove redundant args that are easily identified
+                args = cls._collapse_arguments(args, **assumptions)
+
+                # find local zeros
+                args = cls._find_localzeros(args, **assumptions)
+                args = frozenset(args)  # type: ignore[assignment]
+
+            elif config.run_extra_validations:
+                # Test that applying _collapse_arguments and _find_localzeros do not change the result.
+                args_test = cls._collapse_arguments(args, **assumptions)
+                args_test = cls._find_localzeros(args, **assumptions)
+                args_test = frozenset(args)
+                assert Expr.__new__(
+                    cls, *ordered(args_test), **assumptions
+                ) == Expr.__new__(cls, *ordered(args), **assumptions)
 
         if not args:
             return cls.identity  # type: ignore[attr-defined]
@@ -600,7 +617,52 @@ class MinMaxBase(Expr, LatticeOp):  # type: ignore[misc]
         # base creation
         obj = Expr.__new__(cls, *ordered(args), **assumptions)
         obj._argset = args
+
+        if unique_summation_atoms:
+            obj.unique_summation_atoms = unique_summation_atoms
         return obj
+
+    @classmethod
+    def _should_optimize_max_of_unique_summations(cls, args):
+        """Optimization for patterns of the form
+          max(a+b, c+d)
+          max(max(a+b, c+d), e+f) = max(a+b, c+d, e+f) = k
+          max(k, g+h) .. =  max(a+b, c+d, e+f, g+h)..etc
+        in this case we do not need to run some optimizations when all the symbols
+        are unique. If optimization should not run, return None.
+        else it returns the unique atoms, i,e {a,b,c,d}.
+        """
+        unique_summation_atoms = None
+        if len(args) == 2 and _is_symbols_binary_summation(args[1]):
+            if _is_symbols_binary_summation(args[0]):
+                # base case
+                unique_summation_atoms = cls._unique_atoms_no_constants(args)
+            else:
+                # inductive case.
+                unique_summation_atoms = getattr(
+                    args[0], "unique_summation_atoms", None
+                )
+                if unique_summation_atoms:
+                    unique_summation_atoms = cls._unique_atoms_no_constants(
+                        [args[1]], unique_summation_atoms
+                    )
+        return unique_summation_atoms
+
+    @classmethod
+    def _unique_atoms_no_constants(cls, args, initial_set=None):
+        """Return seen_symbols if all atoms in all args are all unique and symbols,
+        else returns None. initial_set can be used to represent initial value for seen_symbols
+        """
+        seen_symbols = set() if initial_set is None else initial_set
+        for arg in args:
+            for element in arg.atoms():
+                if not isinstance(element, sympy.core.symbol.Symbol):
+                    return None
+                elif element in seen_symbols:
+                    return None
+                else:
+                    seen_symbols.add(element)
+        return seen_symbols
 
     @classmethod
     def _collapse_arguments(cls, args, **assumptions):
