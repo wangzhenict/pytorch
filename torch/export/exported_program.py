@@ -25,6 +25,11 @@ from typing import (
 
 from torch._higher_order_ops.utils import autograd_not_implemented
 from torch._library.fake_class_registry import FakeScriptObject, maybe_to_fake_obj
+from torch._subclasses.fake_impls import (
+    _deregister_op_impl,
+    _is_op_registered_to_fake_rule,
+    register_op_impl,
+)
 from torch._subclasses.fake_tensor import FakeTensorMode
 from torch.fx._utils import first_call_function_nn_module_stack
 from torch.fx.graph import _PyTreeCodeGen, _PyTreeInfo
@@ -48,6 +53,7 @@ from torch._export.utils import (
     _collect_and_set_constant_attrs,
     _collect_param_buffer_metadata,
     _detect_fake_mode_from_gm,
+    _force_dispatch_to_orig_cia_callable,
     _get_decomp_for_cia,
     _is_preservable_cia_op,
     _name_hoo_subgraph_placeholders,
@@ -204,6 +210,7 @@ def _override_composite_implicit_decomp(cia_ops_to_callable, safe=True):
     # replace with aten::_to_copy in FunctionalTensorMode.__torch_dispatch__.
     saved_tables = {}
     patched_ops = set()
+    ops_that_we_register_fake_kernels = set()
     for op_overload, decomp_callable in cia_ops_to_callable.items():
         saved_tables[op_overload] = op_overload.py_kernels.copy()
         patched_ops.add(op_overload)
@@ -223,6 +230,30 @@ def _override_composite_implicit_decomp(cia_ops_to_callable, safe=True):
             op_overload.py_impl(torch._C.DispatchKey.CompositeImplicitAutograd)(
                 decomp_callable
             )
+
+        # [NOTE] Directly registering fake tensor rule to CIA ops
+        #
+        # There are effectively 3 places where an op register tensor propagation logic:
+        # (1) as a CompositeImplicitAutograd decomposition (above FakeTensorMode)
+        # (2) as a FakeTensorMode registration
+        # (3) as a DispatchKey::Meta registration
+        #
+        # During export, we nub out most CIA ops to return NotImplemented to
+        # avoid decomposing them during tracing. To recover the existing shape propagation behavior,
+        # we register these CIA decomps directly as FakeTensorMode rules as well.
+        # A valid question is: all CIA ops are also registered to the Meta key, so why
+        # can't we just rely on running the meta tensor kernels? The issue is that when
+        # FakeTensorMode runs a meta tensor kernel, the devices of all inputs have been
+        # nubbed out to return "meta". If we have any CIA op impls that need to branch on
+        # device, we need to register them as FakeTensorMode rules to preserve any device-specific behavior.
+        if not _is_op_registered_to_fake_rule(op_overload):
+            register_op_impl(op_overload)(
+                functools.partial(
+                    _force_dispatch_to_orig_cia_callable,
+                    original_callable=orig_cia_callable,
+                )
+            )
+            ops_that_we_register_fake_kernels.add(op_overload)
 
         for key in _BACKEND_KEYS_TO_OVERRIDE:
             if key not in op_overload.py_kernels:
@@ -250,6 +281,9 @@ def _override_composite_implicit_decomp(cia_ops_to_callable, safe=True):
             op.py_kernels.clear()
             op.py_kernels.update(saved_tables[op])
             op._dispatch_cache.clear()
+
+        for op in ops_that_we_register_fake_kernels:
+            _deregister_op_impl(op)
 
 
 @contextmanager
