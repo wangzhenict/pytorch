@@ -213,6 +213,8 @@ class _ConfigEntry:
     # environment variables are read at install time
     env_value_force: Any = _UNSET_SENTINEL
     env_value_default: Any = _UNSET_SENTINEL
+    # Used to work arounds bad assumptions in unittest.mock.patch
+    hide: bool = False
 
     def __init__(self, config: Config):
         self.default = config.default
@@ -253,10 +255,14 @@ class ConfigModule(ModuleType):
         else:
             self._config[name].user_override = value
             self._is_dirty = True
+            self._config[name].hide = False
 
     def __getattr__(self, name: str) -> Any:
         try:
             config = self._config[name]
+
+            if config.hide:
+                raise AttributeError(f"{self.__name__}.{name} does not exist")
 
             if config.env_value_force is not _UNSET_SENTINEL:
                 return config.env_value_force
@@ -288,6 +294,7 @@ class ConfigModule(ModuleType):
         # must support delete because unittest.mock.patch deletes
         # then recreate things
         self._config[name].user_override = _UNSET_SENTINEL
+        self._config[name].hide = True
 
     def _is_default(self, name: str) -> bool:
         return self._config[name].user_override is _UNSET_SENTINEL
