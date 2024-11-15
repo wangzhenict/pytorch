@@ -4,6 +4,8 @@ import itertools
 import math
 import operator
 import random
+import sys
+import unittest
 import warnings
 from functools import partial
 from itertools import chain, product
@@ -3571,6 +3573,16 @@ class TestBinaryUfuncs(TestCase):
         torch.float32, torch.float64, torch.bfloat16, torch.complex64, torch.complex128
     )
     def test_logaddexp(self, device, dtype):
+        if sys.version_info >= (3, 12) and dtype in (torch.complex64, torch.complex128):
+            return self.skipTest("complex broken in 3.12")
+        self._test_logaddexp(device, dtype, base2=False)
+
+    @skipIf(sys.version_info < (3, 12), "3.12 broken")
+    @skipIfTorchDynamo()
+    @onlyCPU
+    @unittest.expectedFailure
+    @dtypes(torch.complex64, torch.complex128)
+    def test_logaddexp_complex(self, device, dtype):
         self._test_logaddexp(device, dtype, base2=False)
 
     @dtypes(torch.float32, torch.float64, torch.bfloat16)
