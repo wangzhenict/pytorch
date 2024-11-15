@@ -600,6 +600,7 @@ def to_copy_default(func, *args, **kwargs):
         src = mb_unwrap_functional_tensor(ragged_source)
         tgt.nested_int_memo = src.nested_int_memo
     else:
+        # This is an interesitng one that we need to address.
         _tensor_symint_registry[new_thing] = _tensor_symint_registry[ragged_source]
     inp_kwargs = extract_kwargs(inp)
     inp_kwargs["offsets"] = new_offsets
@@ -2074,7 +2075,6 @@ def _nested_view_from_jagged_default(func, *args, **kwargs):
     _, new_kwargs = normalize_function(  # type: ignore[misc]
         func, args=args, kwargs=kwargs, normalize_to_only_use_kwargs=True
     )
-
     values, offsets, lengths = (
         new_kwargs["input"],
         new_kwargs["offsets"],
