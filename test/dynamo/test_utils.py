@@ -197,6 +197,7 @@ class TestDynamoTimed(TestCase):
             e.dynamo_config = None
             e.co_filename = None
             e.co_firstlineno = None
+            e.inductor_config = None
 
         # First event is for the forward. Formatting makes reading diffs
         # much easier.
@@ -259,7 +260,8 @@ class TestDynamoTimed(TestCase):
  'start_time_us': 100,
  'structured_logging_overhead_s': 0.0,
  'structured_logging_overhead_us': 0,
- 'triton_compile_time_us': None}""",  # noqa: B950
+ 'triton_compile_time_us': None,
+ 'inductor_config': None}""",  # noqa: B950
         )
 
         # Second event is for the backward
@@ -322,7 +324,8 @@ class TestDynamoTimed(TestCase):
  'start_time_us': 100,
  'structured_logging_overhead_s': None,
  'structured_logging_overhead_us': 0,
- 'triton_compile_time_us': None}""",  # noqa: B950
+ 'triton_compile_time_us': None,
+ 'inductor_config': None}""",  # noqa: B950
         )
 
 
