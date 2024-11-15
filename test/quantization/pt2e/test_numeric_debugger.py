@@ -44,7 +44,7 @@ class TestNumericDebugger(TestCase):
     def test_simple(self):
         m = TestHelperModules.Conv2dThenConv1d()
         example_inputs = m.example_inputs()
-        m = torch.export.export(m, example_inputs)
+        m = export_for_training(m, example_inputs).module()
         generate_numeric_debug_handle(m)
         unique_ids = set()
         count = 0
@@ -85,7 +85,7 @@ class TestNumericDebugger(TestCase):
     def test_copy_preserve_handle(self):
         m = TestHelperModules.Conv2dThenConv1d()
         example_inputs = m.example_inputs()
-        m = torch.export.export(m, example_inputs)
+        m = export_for_training(m, example_inputs).module()
         generate_numeric_debug_handle(m)
 
         debug_handle_map_ref = _extract_debug_handles(m)
@@ -98,7 +98,7 @@ class TestNumericDebugger(TestCase):
     def test_deepcopy_preserve_handle(self):
         m = TestHelperModules.Conv2dThenConv1d()
         example_inputs = m.example_inputs()
-        m = torch.export.export(m, example_inputs)
+        m = export_for_training(m, example_inputs).module()
         generate_numeric_debug_handle(m)
 
         debug_handle_map_ref = _extract_debug_handles(m)
@@ -124,14 +124,14 @@ class TestNumericDebugger(TestCase):
     def test_run_decompositions_preserve_handle(self):
         m = TestHelperModules.Conv2dThenConv1d()
         example_inputs = m.example_inputs()
-        m = torch.export.export(m, example_inputs)
-        generate_numeric_debug_handle(m)
+        ep = export_for_training(m, example_inputs)
+        generate_numeric_debug_handle(ep.module())
 
-        debug_handle_map_ref = _extract_debug_handles(m)
+        debug_handle_map_ref = _extract_debug_handles(ep.module())
 
-        m_copy = copy.copy(m)
-        m_copy = m_copy.run_decompositions()
-        debug_handle_map = _extract_debug_handles(m_copy)
+        ep_copy = copy.copy(ep)
+        ep_copy = ep_copy.run_decompositions()
+        debug_handle_map = _extract_debug_handles(ep_copy)
 
         # checking the map still has the same ids, the node may change
         self.assertEqual(

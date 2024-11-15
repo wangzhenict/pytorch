@@ -19,6 +19,13 @@ def generate_numeric_debug_handle(graph_module: GraphModule) -> None:
     """Attach numeric_debug_handle_id for all nodes in the model except for placeholder node
     The graph nodes of input model is modified inplace.
     """
+
+    # Sanity check the input data type
+    if not isinstance(graph_module, GraphModule):
+        raise ValueError(
+            f"Expected graph_module to be GraphModule, got {type(graph_module)}"
+        )
+
     unique_id = 0
     # Find the max ID that exists in the graph first, in case part of the graph
     # has already been annotated. This way we guarantee there are no duplicate
